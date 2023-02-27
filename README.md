@@ -1,12 +1,11 @@
-# E2Calib: How to Calibrate Your Event Camera
+# E2Calib: 事件相机标定
 
 <p align="center">
    <img src="http://rpg.ifi.uzh.ch/img/papers/CVPRW21_Muglikar.png" height="300"/>
 </p>
+该仓库包含了如论文[Muglikar et al. CVPRW'21](http://rpg.ifi.uzh.ch/docs/CVPRW21_Muglikar.pdf)描述的通过事件数据进行灰度视频恢复的实现，以用于进行相机（和外部传感器）标定。
 
-This repository contains code that implements video reconstruction from event data for calibration as described in the paper [Muglikar et al. CVPRW'21](http://rpg.ifi.uzh.ch/docs/CVPRW21_Muglikar.pdf).
-
-If you use this code in an academic context, please cite the following work:
+如果您在学术研究中使用了该代码，请引用下列工作：
 
 [Manasi Muglikar](https://manasi94.github.io/), [Mathias Gehrig](https://magehrig.github.io/), [Daniel Gehrig](https://danielgehrig18.github.io/), [Davide Scaramuzza](http://rpg.ifi.uzh.ch/people_scaramuzza.html), "How to Calibrate Your Event Camera", Computer Vision and Pattern Recognition Workshops (CVPRW), 2021
 
@@ -20,212 +19,125 @@ If you use this code in an academic context, please cite the following work:
 }
 ```
 
-## Installation
-The installation procedure is divided into two parts.
-First, installation of packages for the conversion code that must be completed outside of any virtual environment for compatibility reasons.
-Second, installation of packages in a conda environment to run the reconstruction code.
+**原仓库中支持了三种事件文件的格式，这里仅介绍ROS包格式（[dvs\_msgs](https://github.com/uzh-rpg/rpg_dvs_ros/tree/master/dvs_msgs)）的依赖安装和使用。想了解另外两种格式的可以参考[原仓库](https://github.com/uzh-rpg/e2calib)**
 
-### Conversion to H5
-Our current conversion code supports 3 event file formats:
-1. Rosbags with [dvs\_msgs](https://github.com/uzh-rpg/rpg_dvs_ros/tree/master/dvs_msgs)
-2. Pocolog with [base/samples/EventArray](https://github.com/rock-core/base-orogen-types)
-3. Prophesee raw format using [Metavision 2.2](https://docs.prophesee.ai/2.2.0/installation/index.html)
-4. Prophesee dat format using [Metavision 2.X](https://docs.prophesee.ai/stable/data_formats/file_formats/dat.html)
+## 安装
 
-Regardeless of the event file format:
-```bash
-pip3 install --no-cache-dir -r requirements.txt
-pip3 install dataclasses # if your system Python version is < 3.7
-```
+安装过程总共分为两步（默认已安装了ROS）：
 
-* If you want to convert Prophesee raw format, install [Metavision 2.2](https://docs.prophesee.ai/2.2.0/installation/index.html).
-* If you want to convert Rosbags, install:
+1. 因为兼容性的问题，需要在原始环境（不能是虚拟环境）中安装**转换代码**的依赖包。
+2. 在conda环境中安装**图像恢复代码**的依赖包。
+
+### 转换代码的依赖
 
 ```bash
+pip3 install --no-cache-dir -r requirements.txt # 请在克隆的本仓库路径下执行
+pip3 install dataclasses # 如果你的python版本小于3.7
 pip3 install --extra-index-url https://rospypi.github.io/simple/ rospy rosbag
 ```
 
+### 图像恢复的依赖
 
-### Image Reconstruction
-For running the reconstruction code, we create a new conda environment. Use an appropriate cuda version.
+首先需要安装anaconda，可参考[链接](https://blog.csdn.net/qq_39779233/article/details/127199957)。
+
+然后执行下述，cuda请根据显卡驱动版本进行安装，对应关系可参考[链接](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#id4)。
 
 ```bash
 cuda_version=10.1
 
-conda create -y -n e2calib python=3.7
+conda create -y -n e2calib python=3.7 # 创建e2calib的conda虚拟环境
 conda activate e2calib
 conda install -y -c anaconda numpy scipy
 conda install -y -c conda-forge h5py opencv tqdm
 conda install -y -c pytorch pytorch torchvision cudatoolkit=$cuda_version
 
-pip install python/ # this installs e2vid
+pip install python/ # 请在克隆的本仓库路径下执行，这一步是为了安装e2vid
 ```
 
-The reconstruction code uses events saved in the h5 file format to reconstruct images with [E2VID](http://rpg.ifi.uzh.ch/docs/TPAMI19_Rebecq.pdf).
+图像恢复代码通过[E2VID](http://rpg.ifi.uzh.ch/docs/TPAMI19_Rebecq.pdf)将h5格式文件中的事件恢复成灰度图像。
 
-### Reconstructions to Rosbag
-If you want to use [kalibr](https://github.com/ethz-asl/kalibr), you may want to create a rosbag from the reconstructed images.
-To achieve this, additionally install (outside of the conda environment)
+为了将结果输入[kalibr](https://github.com/ethz-asl/kalibr) （多相机和IMU标定包），还需要将恢复的图像转换为rosbag，因此还需要在**原始环境**中安装以下依赖：
 
 ```bash
-pip3 install tqdm opencv-python
+pip3 install tqdm opencv-python opencv-contrib-python
 pip3 install --extra-index-url https://rospypi.github.io/simple/ sensor-msgs
 ```
 
-## Calibration Procedure
+### kalibr安装
 
-The calibration procedure is based on three steps:
-1. Conversion of different event data files into a common hdf5 format.
-2. Reconstruction of images at a certain frequency from this file. Requires the activation of the conda environment `e2calib`.
-3. Calibration using your favorite image-based calibration toolbox.
+请参考kalibr[官方安装手册](https://github.com/ethz-asl/kalibr/wiki/installation)
 
-### Conversion to H5 from ROS bags
+## 标定
 
-The [conversion script](https://github.com/uzh-rpg/e2calib/blob/main/python/convert.py) simply requires the path to the event file and optionally a ros topic in case of a rosbag.
+标定分为四步：
 
-If you have an older Metavision version (for example Metavision 2.0), first convert the '.raw' files to '.dat' and then convert it to h5 file format. 
+1. 将rosbag转换为常规hdf5格式的文件。
+2. 将(1)生成的h5文件以固定频率实现图像恢复，这一步需要之前构建的`e2calib`环境。
+3. 将恢复图像和IMU信息合成rosbag
+4. 使用`kalibr`对(3)生成的rosbag进行标定
 
-*Note* : The '.dat' file format takes up more space on the disk but for metavision 2.0, the python API can only read '.dat' format.
+注意：除步骤(2)之外，其他python环境使用的都是原始环境。
 
-### Conversion to H5 from Pocolog/Rock files
-
-Pocolog is the file format for logging data in [Rock](https://www.rock-robotics.org/). It is equivalent to the bag format in [ROS](https://www.ros.org/). More specifically [Pocolog](https://github.com/rock-core/tools-pocolog) is the tool to manupilate [log](https://github.com/rock-core/tools-logger) files.
-
-The [conversion script](https://github.com/uzh-rpg/e2calib/blob/main/python/convert.py) understands the Pocolog file format from the pocolog [conversion](https://github.com/uzh-rpg/e2calib/blob/main/python/conversion/pocolog.py) file. You need a Rock installation with the Pocolog python bindings [Pocolog Pybind](https://github.com/jhidalgocarrio/tools-pocolog_pybind) installed in order to convert events in pocolog to h5 format. Please follow the installation guide to install Rock on your system: [How to install Rock](https://www.rock-robotics.org/documentation/installation.html). Afterwards clone the Pocolog Python bindings:
+### 将rosbag转换为h5
 
 ```bash
-git clone git@github.com:jhidalgocarrio/tools-pocolog_pybind.git <rock-path>/tools/pocolog_pybind
+cd python/ # 请在克隆的本仓库路径下执行
+python3 convert.py ${rosbag名(含路径)} -o ${h5文件名(含路径)} -t ${事件在rosbag中的topic}
 ```
 
-Compile and install the Pocolog Python bindings:
+### 图像恢复
 
 ```bash
-source <rock-path>/env.sh
-cd <rock-path>/tools/pocolog_pybind
-amake
-python3 -m pip install <rock-path>/tools/pocolog_pybind
+cd python/ # 请在克隆的本仓库路径下执行
+python3 offline_reconstruction.py  --h5file ${h5文件名(含路径)} --freq_hz ${保存图像的频率} --upsample_rate ${上采样率} --height ${图像高度} --width ${图像长度}
 ```
 
-You can now simply use the [conversion script](https://github.com/uzh-rpg/e2calib/blob/main/python/convert.py) with the path to the pocolog file and the port name  (i.e.: similar to ros topic name) containing the events (e.g.: --topic /camera_prophesee.events).
+上采样率：举个例子，若`freq_hz`设置为5，`upsample_rate`设置为4，则生成图像频率为5hz，生成图像的窗长为 $\frac{1}{5\times4}s=0.05s$。
+
+建议将`freq_hz`设置为5，`upsample_rate`设置为4。
+
+图片会被默认保存至`${e2calib}/python/frames/e2calib`路径
+
+### 合成rosbag
+
+由于可能需要进行外参标定，所以建议使用kalibr的bagcreater，以下以两个相机+一个IMU举个例子：
+
+保存路径设置为
+
+```
++-- dataset-dir
+    +-- cam0
+    │   +-- 1385030208726607500.png
+    │   +--      ...
+    │   \-- 1385030212176607500.png
+    +-- cam1
+    │   +-- 1385030208726607500.png
+    │   +--      ...
+    │   \-- 1385030212176607500.png
+    \-- imu0.csv
+```
+
+imu0.csv文件应使用以下格式：(timestamps=[ns], omega=[rad/s], alpha=[m/s^2])
+
+```
+timestamp,omega_x,omega_y,omega_z,alpha_x,alpha_y,alpha_z
+1385030208736607488,0.5,-0.2,-0.1,8.1,-1.9,-3.3
+ ...
+1386030208736607488,0.5,-0.1,-0.1,8.1,-1.9,-3.3
+```
+
+通过以下命令合成rosbag（请先source kalibr工作空间的环境变量）
 
 ```bash
-python convert.py <pocolog_file> -t <port_name>
+rosrun kalibr kalibr_bagcreater --folder dataset-dir/. --output-bag ${rosbag名}
 ```
 
-If you don't know the port names in a log file just run pocolog (i.e.: similar to rosbag info):
+按照上述得到的rosbag话题名为：
 
-```bash
-source <rock-path>/env.sh
-pocolog <pocolog_file>
-```
+- /cam0/image_raw
+- /cam1/image_raw
+- /imu0
 
-You can also use our [Dockerfile](https://download.ifi.uzh.ch/rpg/e2calib/pocolog/Dockerfile) to create a docker image with all the necessary tools. You should be able to convert from pocolog to rosbag and h5 format out-of-the-box. To build the docker image run:
+### 标定
 
-```bash
-docker build -t <image_name> -f Dockerfile .
-```
-
-### Reconstruction
-
-The [reconstruction](https://github.com/uzh-rpg/e2calib/blob/main/python/offline_reconstruction.py) requires the h5 file to convert events to frames.
-Additionally, you also need to specify the height and width of the event camera and the frequency or timestamps at which you want to reconstruct the frames.
-As an example, to run the image reconstruction code on one of the example files use the following command:
-```bash
-  cd python
-  python offline_reconstruction.py  --h5file file --freq_hz 5 --upsample_rate 4 --height 480 --width 640 
-```
-
-The images will be written by default in the ```python/frames/e2calib``` folder.
-
-#### Fixed Frequency
-
-Reconstruction can be performed at a fixed frequency. This is useful for intrinsic calibration. The argument `--freq_hz` specifies the frequency at which the image reconstructions will be saved.
-
-#### Specified Timestamps
-
-You can also specify the timestamps for image reconstruction from a text file. As an example, these timestamps can be trigger signals that synchronize the event camera with the exposure time of a frame-based camera. In this scenario, you may want to reconstruct images from the event camera at the trigger timestamps for extrinsic calibration. The argument `--timestamps_file` must point to a text file containing the timestamps in microseconds for this option to take effect.
-
-We provide a script to [extract trigger signals from a prophesee raw file](python/extract_triggers_prophesee.py).
-
-#### Upsampling
-
-We provide the option to multiply the reconstruction rate by a factor via the `--upsample_rate` argument. For example, setting this value to 3 will lead to 3 times higher reconstruction rate but does not influence the final number of reconstructed images that will be saved. This parameter can be used to finetune the reconstruction performance. For example setting `--freq_hz` to 5 without upsampling can lead to suboptimal performance because too many events are fed to E2VID. Instead, it is often a good start to work with 20 Hz reconstruction, thus setting the upsampling rate to 4.
-
-
-### Calibration
-
-Once the reconstructed images are ready, you can use any image calibration toolbox.
-We provide a [script](python/images_to_rosbag.py) to convert the reconstructed images to rosbag, that can be used with [kalibr](https://github.com/ethz-asl/kalibr) calibration toolbox for intrinsic calibration. Please use this script outside the conda environment.
-```bash
-cd python
-python3 images_to_rosbag.py --rosbag_folder python/frames/ --image_folder  python/frames/e2calib --image_topic /dvs/image_reconstructed
-```
-
-In case you would like to combine images with other sensors for extrinsics calibration, please take a look at the [kalibr bagcreator script](https://github.com/ethz-asl/kalibr/wiki/bag-format#bagcreater) 
-
-Here are instructions to run kalibr in docker, using the [following docker image](https://hub.docker.com/r/stereolabs/kalibr). The following instructions are copied from there:
-
-```bash
-folder=path/to/calibration/bag/
-bagname=name_of.bag
-targetname=target.yaml
-topic1=/cam0/image_raw 
-topic2=/cam1/image_raw
-
-sudo snap install docker
-sudo docker pull stereolabs/kalibr
-xhost +local:root
-sudo docker run -it -e "DISPLAY" -e "QT_X11_NO_MITSHM=1" -v "/tmp/.X11-unix:/tmp/.X11-unix:rw" -v "$folder:/calib" stereolabs/kalibr:kinetic
-kalibr_calibrate_cameras --bag /calib/$bagname --target /calib/$targetname --models 'pinhole-radtan' 'pinhole-radtan' --topics $topic1 $topic2
-```
-
-## Example Files
-For each file, we provide the original event file format (raw or rosbag) but also the already converted h5 file.
-
-### Prophesee Gen 3
-**Without Triggers:**
-```bash
-wget https://download.ifi.uzh.ch/rpg/e2calib/prophesee/without_triggers/data.raw
-wget https://download.ifi.uzh.ch/rpg/e2calib/prophesee/without_triggers/data.h5
-```
-*Reconstruction Example*
-
-To reconstruct images from events at a fixed frequency, you can follow this example command:
-```bash
-  conda activate e2calib
-  cd python
-  python offline_reconstruction.py  --freq_hz 10 --upsample_rate 2 --h5file data.h5 --output_folder gen3_no_trigger --height 480 --width 640
-```
-![Sample reconstruction](img/gen3_no_trigger_0000000001700066000.png?raw=true)
-
-**With Triggers:**
-
-We also extracted the trigger signals using the provided [script](python/extract_triggers_prophesee.py) and provide them in the `triggers.txt` file.
-```bash
-wget https://download.ifi.uzh.ch/rpg/e2calib/prophesee/with_triggers/data.raw
-wget https://download.ifi.uzh.ch/rpg/e2calib/prophesee/with_triggers/data.h5
-wget https://download.ifi.uzh.ch/rpg/e2calib/prophesee/with_triggers/triggers.txt
-```
-*Reconstruction Example*
-
-To reconstruct images from events at the trigger time, you can follow this example command:
-```bash
-  conda activate e2calib
-  cd python
-  python offline_reconstruction.py  --upsample_rate 2 --h5file data.h5 --output_folder gen3_with_trigger/ --timestamps_file triggers.txt --height 480 --width 640
-```
-
-### Samsung Gen 3
-**Without Triggers:**
-```bash
-wget https://download.ifi.uzh.ch/rpg/e2calib/samsung/samsung.bag
-wget https://download.ifi.uzh.ch/rpg/e2calib/samsung/samsung.h5
-```
-*Reconstruction Example*
-
-To reconstruct images from events at fixed frequency, you can follow this example command:
-```bash
-  conda activate e2calib
-  cd python
-  python offline_reconstruction.py --freq_hz 5 --upsample_rate 4 --h5file samsung.h5 --output_folder samsung_gen3 --height 480 --width 640
-```
+请参考kalibr的[wiki](https://github.com/ethz-asl/kalibr/wiki)。
